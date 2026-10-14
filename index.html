@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Дисциплина</title>
+    
+    <!-- Настройки нативного приложения для iPhone (PWA) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Дисциплина">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230f172a'/><text y='68' x='50' text-anchor='middle' font-size='55'>⚡</text></svg>">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 1rem; }
+        input, button { font-size: 16px !important; } /* Защита от авто-зума в Safari на iPhone */
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto space-y-5">
+        
+        <!-- Шапка -->
+        <header class="card p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                    ⚡ Система Дисциплины
+                </h1>
+                <p id="currentDateDisplay" class="text-slate-400 text-xs mt-0.5"></p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <div class="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                    <span class="text-xs text-slate-400">Пуш:</span>
+                    <input type="time" id="reminderTime" class="bg-transparent text-sm text-white focus:outline-none" onchange="saveReminderSettings()">
+                    <button id="notifBtn" onclick="requestNotificationPermission()" class="text-xs bg-indigo-600 active:bg-indigo-500 px-2.5 py-1 rounded-lg text-white font-medium">
+                        Вкл
+                    </button>
+                </div>
+
+                <button onclick="syncGarmin()" id="syncBtn" class="flex items-center gap-1.5 bg-sky-600 active:bg-sky-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-lg shadow-sky-900/30">
+                    <span>🔄</span> <span id="syncText">Garmin</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Метрики Garmin Connect -->
+        <section class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="card p-3.5">
+                <div class="text-slate-400 text-[11px] font-semibold uppercase">Шаги</div>
+                <div class="text-xl font-bold text-white mt-1" id="g-steps">—</div>
+                <div class="text-[11px] text-emerald-400 mt-0.5" id="g-steps-goal">Цель: 10 000</div>
+            </div>
+            <div class="card p-3.5">
+                <div class="text-slate-400 text-[11px] font-semibold uppercase">Body Battery</div>
+                <div class="text-xl font-bold text-sky-400 mt-1" id="g-bb">— / 100</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Заряд тела</div>
+            </div>
+            <div class="card p-3.5">
+                <div class="text-slate-400 text-[11px] font-semibold uppercase">Сон (Оценка)</div>
+                <div class="text-xl font-bold text-indigo-400 mt-1" id="g-sleep">—</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Норма: 7.5+ ч</div>
+            </div>
+            <div class="card p-3.5">
+                <div class="text-slate-400 text-[11px] font-semibold uppercase">Пульс покоя</div>
+                <div class="text-xl font-bold text-rose-400 mt-1" id="g-rhr">—</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Восстановление</div>
+            </div>
+            <div class="card p-3.5 col-span-2 sm:col-span-1">
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400 text-[11px] font-semibold uppercase">Тренировка</span>
+                    <span class="text-[10px] text-slate-500" id="g-updated"></span>
+                </div>
+                <div class="text-base font-bold text-amber-400 mt-1 truncate" id="g-activity">Ожидание синхр.</div>
+                <div class="text-[11px] text-slate-400 mt-0.5" id="g-activity-sub">—</div>
+            </div>
+        </section>
+
+        <!-- Основная сетка -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            
+            <!-- Цели на День / Неделю / Месяц -->
+            <div class="lg:col-span-7">
+                <div class="card p-4 sm:p-5">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-700/80 pb-3.5">
+                        <div class="grid grid-cols-3 w-full sm:w-auto bg-slate-900 p-1 rounded-xl">
+                            <button onclick="switchTab('daily')" id="tab-daily" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white">День</button>
+                            <button onclick="switchTab('weekly')" id="tab-weekly" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400">Неделя</button>
+                            <button onclick="switchTab('monthly')" id="tab-monthly" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400">Месяц</button>
+                        </div>
+                        
+                        <div class="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3">
+                            <div class="flex items-center gap-2 flex-1 sm:flex-initial">
+                                <div class="w-full sm:w-28 bg-slate-700 h-2 rounded-full overflow-hidden">
+                                    <div id="progressBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <span id="progressText" class="text-xs font-bold text-emerald-400 w-9 text-right">0%</span>
+                            </div>
+                            <button onclick="resetCurrentTab()" class="text-[11px] text-slate-400 hover:text-white bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                                Сброс
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Добавление цели -->
+                    <div class="mt-3.5 flex gap-2">
+                        <input type="text" id="newGoalInput" placeholder="Новая цель..." 
+                            class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                            onkeypress="if(event.key === 'Enter') addGoal()">
+                        <button onclick="addGoal()" class="bg-emerald-600 active:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-semibold">
+                            +
+                        </button>
+                    </div>
+
+                    <!-- Список целей -->
+                    <ul id="goalsList" class="mt-3.5 space-y-2"></ul>
+                </div>
+            </div>
+
+            <!-- Календарь и Расписание -->
+            <div class="lg:col-span-5">
+                <div class="card p-4 sm:p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-base font-bold text-white" id="calendarMonthTitle"></h2>
+                        <div class="flex gap-1.5">
+                            <button onclick="changeMonth(-1)" class="px-2.5 py-1 bg-slate-800 active:bg-slate-700 rounded-lg text-slate-300 text-xs">◀</button>
+                            <button onclick="changeMonth(1)" class="px-2.5 py-1 bg-slate-800 active:bg-slate-700 rounded-lg text-slate-300 text-xs">▶</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-400 mb-1.5">
+                        <div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div>
+                    </div>
+                    <div id="calendarGrid" class="grid grid-cols-7 gap-1 text-center text-xs"></div>
+
+                    <hr class="border-slate-700/80 my-4">
+
+                    <!-- Расписание на выбранный день -->
+                    <div>
+                        <h3 class="text-xs font-semibold text-slate-300 mb-2.5">
+                            Расписание на <span id="selectedDateLabel" class="text-indigo-400">сегодня</span>
+                        </h3>
+
+                        <div class="flex gap-1.5 mb-3">
+                            <input type="time" id="schedTime" value="09:00" class="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-sm text-white focus:outline-none">
+                            <input type="text" id="schedTitle" placeholder="Событие (учеба, смена, бег)..." 
+                                class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none"
+                                onkeypress="if(event.key === 'Enter') addScheduleItem()">
+                            <button onclick="addScheduleItem()" class="bg-indigo-600 active:bg-indigo-500 text-white px-3.5 py-1.5 rounded-xl text-sm font-semibold">+</button>
+                        </div>
+
+                        <div id="scheduleList" class="space-y-1.5"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'daily';
+        let viewDate = new Date();
+        let selectedDateStr = formatDateKey(new Date());
+
+        function formatDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        const defaultState = {
+            lastOpenedDate: formatDateKey(new Date()),
+            reminderTime: "21:30",
+            lastNotifiedDate: "",
+            goals: {
+                daily: [
+                    { id: 1, text: "Тренировка по плану", done: false, autoGarmin: "activity" },
+                    { id: 2, text: "Норма активности (10 000+ шагов)", done: false, autoGarmin: "steps" },
+                    { id: 3, text: "Фокус-блок: учёба и проекты (90 мин)", done: false },
+                    { id: 4, text: "Сон 7.5+ часов и восстановление", done: false, autoGarmin: "sleep" }
+                ],
+                weekly: [
+                    { id: 101, text: "Выполнить недельный беговой объём", done: false },
+                    { id: 102, text: "2 силовые / ОФП тренировки", done: false },
+                    { id: 103, text: "Закрыть все задачи по учёбе и работе", done: false }
+                ],
+                monthly: [
+                    { id: 201, text: "Держать дисциплину 85%+ дней месяца", done: false },
+                    { id: 202, text: "Закрыть месячный тренировочный план без пропусков", done: false }
+                ]
+            },
+            schedule: {
+                [formatDateKey(new Date())]: [
+                    { time: "08:00", title: "Подъём и разминка" },
+                    { time: "10:00", title: "Учёба / Рабочий блок" },
+                    { time: "18:30", title: "Тренировка (Garmin)" },
+                    { time: "21:30", title: "Подведение итогов дня" }
+                ]
+            }
+        };
+
+        let appState = JSON.parse(localStorage.getItem('discipline_hub_v2')) || defaultState;
+
+        // Автоматический сброс ежедневных целей с наступлением нового дня
+        const todayStr = formatDateKey(new Date());
+        if (appState.lastOpenedDate !== todayStr) {
+            appState.goals.daily.forEach(g => g.done = false);
+            appState.lastOpenedDate = todayStr;
+            saveState();
+        }
+
+        function saveState() {
+            localStorage.setItem('discipline_hub_v2', JSON.stringify(appState));
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['daily', 'weekly', 'monthly'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                btn.className = (t === tab)
+                    ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white"
+                    : "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400";
+            });
+            renderGoals();
+        }
+
+        function renderGoals() {
+            const list = document.getElementById('goalsList');
+            list.innerHTML = '';
+            const goals = appState.goals[currentTab] || [];
+
+            goals.forEach(g => {
+                const li = document.createElement('li');
+                li.className = `flex items-center justify-between p-3 rounded-xl border transition ${g.done ? 'bg-slate-900/40 border-slate-800 text-slate-500' : 'bg-slate-800/70 border-slate-700 text-slate-100'}`;
+                const badge = g.autoGarmin ? `<span class="ml-2 text-[10px] bg-sky-900/70 text-sky-300 border border-sky-700/50 px-1.5 py-0.5 rounded-md">Garmin</span>` : '';
+
+                li.innerHTML = `
+                    <label class="flex items-center gap-3 cursor-pointer flex-1 py-0.5">
+                        <input type="checkbox" ${g.done ? 'checked' : ''} onchange="toggleGoal(${g.id})" 
+                            class="w-5 h-5 rounded accent-emerald-500 cursor-pointer">
+                        <span class="text-sm ${g.done ? 'line-through' : ''}">${g.text}</span>
+                        ${badge}
+                    </label>
+                    <button onclick="deleteGoal(${g.id})" class="text-slate-500 active:text-rose-400 text-sm px-2 py-1">✕</button>
+                `;
+                list.appendChild(li);
+            });
+
+            const total = goals.length;
+            const completed = goals.filter(g => g.done).length;
+            const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
+            document.getElementById('progressBar').style.width = `${pct}%`;
+            document.getElementById('progressText').innerText = `${pct}%`;
+        }
+
+        function toggleGoal(id) {
+            const goal = appState.goals[currentTab].find(g => g.id === id);
+            if (goal) {
+                goal.done = !goal.done;
+                saveState();
+                renderGoals();
+            }
+        }
+
+        function resetCurrentTab() {
+            appState.goals[currentTab].forEach(g => g.done = false);
+            saveState();
+            renderGoals();
+        }
+
+        function addGoal() {
+            const input = document.getElementById('newGoalInput');
+            const text = input.value.trim();
+            if (!text) return;
+            appState.goals[currentTab].push({ id: Date.now(), text, done: false });
+            input.value = '';
+            saveState();
+            renderGoals();
+        }
+
+        function deleteGoal(id) {
+            appState.goals[currentTab] = appState.goals[currentTab].filter(g => g.id !== id);
+            saveState();
+            renderGoals();
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+
+            const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+            document.getElementById('calendarMonthTitle').innerText = `${monthNames[month]} ${year}`;
+
+            const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            for (let i = 0; i < firstDayIndex; i++) {
+                grid.innerHTML += `<div></div>`;
+            }
+
+            const todayKey = formatDateKey(new Date());
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const key = formatDateKey(new Date(year, month, day));
+                const isSelected = key === selectedDateStr;
+                const isToday = key === todayKey;
+                const hasEvents = (appState.schedule[key] && appState.schedule[key].length > 0);
+
+                let classes = "py-2 rounded-xl cursor-pointer transition relative ";
+                if (isSelected) classes += "bg-indigo-600 text-white font-bold ";
+                else if (isToday) classes += "border border-indigo-400 text-indigo-300 ";
+                else classes += "hover:bg-slate-800 text-slate-300 ";
+
+                const dot = hasEvents ? `<span class="block w-1 h-1 bg-emerald-400 rounded-full mx-auto mt-0.5"></span>` : '';
+
+                grid.innerHTML += `
+                    <div onclick="selectDate('${key}')" class="${classes}">
+                        ${day}
+                        ${dot}
+                    </div>
+                `;
+            }
+        }
+
+        function changeMonth(delta) {
+            viewDate.setMonth(viewDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+        function selectDate(dateStr) {
+            selectedDateStr = dateStr;
+            document.getElementById('selectedDateLabel').innerText = dateStr;
+            renderCalendar();
+            renderSchedule();
+        }
+
+        function renderSchedule() {
+            const list = document.getElementById('scheduleList');
+            list.innerHTML = '';
+            const items = (appState.schedule[selectedDateStr] || []).sort((a, b) => a.time.localeCompare(b.time));
+
+            if (items.length === 0) {
+                list.innerHTML = `<div class="text-xs text-slate-500 text-center py-3">На этот день событий пока нет</div>`;
+                return;
+            }
+
+            items.forEach((item, idx) => {
+                list.innerHTML += `
+                    <div class="flex items-center justify-between bg-slate-900/80 border border-slate-800 px-3 py-2 rounded-xl text-sm">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-indigo-400 font-mono text-xs font-semibold">${item.time}</span>
+                            <span class="text-slate-200 text-xs sm:text-sm">${item.title}</span>
+                        </div>
+                        <button onclick="removeScheduleItem(${idx})" class="text-slate-600 active:text-rose-400 text-xs px-1">✕</button>
+                    </div>
+                `;
+            });
+        }
+
+        function addScheduleItem() {
+            const time = document.getElementById('schedTime').value || "12:00";
+            const titleInput = document.getElementById('schedTitle');
+            const title = titleInput.value.trim();
+            if (!title) return;
+
+            if (!appState.schedule[selectedDateStr]) appState.schedule[selectedDateStr] = [];
+            appState.schedule[selectedDateStr].push({ time, title });
+            titleInput.value = '';
+            saveState();
+            renderCalendar();
+            renderSchedule();
+        }
+
+        function removeScheduleItem(idx) {
+            appState.schedule[selectedDateStr].splice(idx, 1);
+            saveState();
+            renderCalendar();
+            renderSchedule();
+        }
+
+        async function syncGarmin() {
+            const syncText = document.getElementById('syncText');
+            syncText.innerText = "Загрузка...";
+
+            try {
+                const res = await fetch('./garmin_data.json?t=' + Date.now());
+                if (!res.ok) throw new Error('No file yet');
+                const data = await res.json();
+                applyGarminData(data);
+                syncText.innerText = "Обновлено";
+            } catch (e) {
+                syncText.innerText = "Нет файла";
+            } finally {
+                setTimeout(() => { syncText.innerText = "Garmin"; }, 2500);
+            }
+        }
+
+        function applyGarminData(data) {
+            document.getElementById('g-steps').innerText = (data.steps || 0).toLocaleString('ru-RU');
+            document.getElementById('g-steps-goal').innerText = `Цель: ${(data.stepGoal || 10000).toLocaleString('ru-RU')}`;
+            document.getElementById('g-bb').innerText = `${data.bodyBattery || 0} / 100`;
+            document.getElementById('g-sleep').innerText = `${data.sleepHours || 0}ч (${data.sleepScore || 0})`;
+            document.getElementById('g-rhr').innerText = `${data.restingHr || '—'} уд/м`;
+            document.getElementById('g-activity').innerText = data.lastActivityName || "Нет записей";
+            document.getElementById('g-activity-sub').innerText = data.lastActivitySub || "—";
+            if (data.updatedAt) {
+                document.getElementById('g-updated').innerText = data.updatedAt;
+            }
+
+            appState.goals.daily.forEach(g => {
+                if (g.autoGarmin === 'steps' && data.steps >= data.stepGoal) g.done = true;
+                if (g.autoGarmin === 'sleep' && data.sleepHours >= 7.5) g.done = true;
+                if (g.autoGarmin === 'activity' && data.hasActivityToday) g.done = true;
+            });
+            saveState();
+            renderGoals();
+        }
+
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                alert("Для Push на iPhone сначала добавь сайт на экран «Домой» через кнопку Поделиться в Safari.");
+                return;
+            }
+            Notification.requestPermission().then(perm => {
+                if (perm === "granted") {
+                    document.getElementById('notifBtn').innerText = "Ок";
+                    document.getElementById('notifBtn').className = "text-xs bg-emerald-600 px-2.5 py-1 rounded-lg text-white font-medium";
+                    new Notification("⚡ Система Дисциплины", { body: "Напоминания активны!" });
+                }
+            });
+        }
+
+        function saveReminderSettings() {
+            appState.reminderTime = document.getElementById('reminderTime').value;
+            saveState();
+        }
+
+        setInterval(() => {
+            const now = new Date();
+            const currentHM = now.toTimeString().slice(0, 5);
+            const todayKey = formatDateKey(now);
+
+            if (currentHM === appState.reminderTime && appState.lastNotifiedDate !== todayKey) {
+                const pending = appState.goals.daily.filter(g => !g.done).length;
+                if (pending > 0 && "Notification" in window && Notification.permission === "granted") {
+                    new Notification("⚡ Проверь дисциплину!", {
+                        body: `Осталось незакрытых целей на сегодня: ${pending}.`
+                    });
+                    appState.lastNotifiedDate = todayKey;
+                    saveState();
+                }
+            }
+        }, 25000);
+
+        document.getElementById('currentDateDisplay').innerText = new Date().toLocaleDateString('ru-RU', {
+            weekday: 'long', day: 'numeric', month: 'long'
+        });
+        document.getElementById('reminderTime').value = appState.reminderTime || "21:30";
+        renderGoals();
+        renderCalendar();
+        renderSchedule();
+        syncGarmin();
+    </script>
+</body>
+</html>
