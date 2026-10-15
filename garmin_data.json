@@ -1,11 +1,11 @@
 {
-  "updatedAt": "05:38",
-  "steps": 11,
+  "updatedAt": "11:44",
+  "steps": 265,
   "stepGoal": 10310,
-  "bodyBattery": 40,
-  "sleepHours": 0.0,
-  "sleepScore": 0,
-  "restingHr": 0,
+  "bodyBattery": 89,
+  "sleepHours": 6.3,
+  "sleepScore": 87,
+  "restingHr": 50,
   "lastActivityName": "Петербург - База • 5.9 км",
   "lastActivitySub": "30 мин • 175.0 уд/мин",
   "hasActivityToday": false
