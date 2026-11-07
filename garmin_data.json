@@ -1,11 +1,11 @@
 {
-  "updatedAt": "23:11",
-  "steps": 4633,
-  "stepGoal": 8620,
-  "bodyBattery": 50,
+  "updatedAt": "04:29",
+  "steps": 0,
+  "stepGoal": 10000,
+  "bodyBattery": 0,
   "sleepHours": 0.0,
   "sleepScore": 0,
-  "restingHr": 52,
+  "restingHr": 0,
   "lastActivityName": "Петербург Бег • 1.9 км",
   "lastActivitySub": "11 мин • 166.0 уд/мин",
   "hasActivityToday": false
